@@ -538,14 +538,18 @@ class Record(list):
                         warn('Unexpected error: {}'.format(exc_info()))
                         warn('dataRead crashed, back to python data reading')
 
-                record_length = self.recordIDnumber + self.CGrecordLength
-                for r in range(self.numberOfRecords):  # for each record,
-                    buf = fid.read(record_length)
-                    for channel in rec_chan:
-                        (rec[channel.name][r],) = \
-                            channel.CFormat.unpack(buf[channel.posByteBeg:
-                                                       channel.posByteEnd])
-                return rec.view(recarray)
+                try:
+                    record_length = self.recordIDnumber + self.CGrecordLength
+                    for r in range(self.numberOfRecords):  # for each record,
+                        buf = fid.read(record_length)
+                        for channel in rec_chan:
+                            (rec[channel.name][r],) = \
+                                channel.CFormat.unpack(buf[channel.posByteBeg:
+                                                           channel.posByteEnd])
+                    return rec.view(recarray)
+                except:
+                    return None
+
 
     def read_record_buf(self, buf, channel_set=None):
         """ read stream of record bytes
@@ -770,7 +774,10 @@ class DATA(dict):
             (record_id,) = record_id_c_format.unpack(self.fid.read(1))
             for channel_name in channel_name_set[record_id]:  # list of channel classes from channelSet
                 self.fid.seek(record_position + pos_byte_beg[channel_name])
-                buf[channel_name][index[record_id]] = self.fid.read(nBytes[channel_name])
+                try:
+                    buf[channel_name][index[record_id]] = self.fid.read(nBytes[channel_name])
+                except:
+                    pass
             # recordId is only uint8
             record_position += self[record_id]['record'].CGrecordLength + 1
             index[record_id] += 1
@@ -970,7 +977,10 @@ class Mdf3(MdfSkeleton):
                                     recordToChannelMatching[chan.name]
                             else:
                                 record_name = chan.name
-                            temp = buf[recordID]['data'][record_name]
+                            try:
+                                temp = buf[recordID]['data'][record_name]
+                            except:
+                                temp = []
 
                             if len(temp) != 0:
                                 # Process concatenated bits inside uint8
@@ -978,9 +988,15 @@ class Mdf3(MdfSkeleton):
                                     # if channel data do not use complete bytes
                                     if chan.signalDataType in (0, 1, 9, 10, 13, 14):  # integers
                                         if chan.embedding_channel_bitOffset > 0:
-                                            temp = right_shift(temp, chan.embedding_channel_bitOffset)
+                                            try:
+                                                temp = right_shift(temp, chan.embedding_channel_bitOffset)
+                                            except:
+                                                continue
                                         mask = int(pow(2, chan.bitCount) - 1)  # masks isBitUint8
-                                        temp = bitwise_and(temp, mask)
+                                        try:
+                                            temp = bitwise_and(temp, mask)
+                                        except:
+                                            continue
                                     else:  # should not happen
                                         warn('bit count and offset not applied to correct data type')
                                 self.add_channel(chan.name, temp, master_channel, master_type=1, unit=chan.unit,
